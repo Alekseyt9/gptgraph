@@ -133,15 +133,16 @@ const paperElement = document.getElementById('paper');
 
 function createStyledLink() {
   return new dia.Link({
-    router: { name: 'manhattan' },
+    router: { name: 'orthogonal' },
+    connector: { name: 'smooth' },
     attrs: {
       line: {
-        stroke: '#cdd5df',
-        strokeWidth: 1.4,
+        stroke: '#334155',
+        strokeWidth: 2.2,
         targetMarker: {
           type: 'path',
           d: 'M 10 -5 0 0 10 5 z',
-          fill: '#cdd5df'
+          fill: '#334155'
         }
       }
     }
@@ -191,17 +192,17 @@ function getPaperTranslation() {
 const ConversationNode = dia.Element.define(
   'app.ConversationNode',
   {
-    size: { width: 360, height: 260 },
+    size: { width: 72, height: 52 },
     attrs: {
       body: {
         fill: '#ffffff',
-        stroke: '#ced8e3',
-        strokeWidth: 1,
-        rx: 18,
-        ry: 18,
+        stroke: '#64748b',
+        strokeWidth: 1.6,
+        rx: 8,
+        ry: 8,
         filter: {
           name: 'dropShadow',
-          args: { dx: 0, dy: 6, blur: 18, color: 'rgba(15, 23, 42, 0.15)' }
+          args: { dx: 0, dy: 3, blur: 10, color: 'rgba(15, 23, 42, 0.12)' }
         },
         magnet: true
       },
