@@ -192,9 +192,11 @@ function getPaperTranslation() {
 const ConversationNode = dia.Element.define(
   'app.ConversationNode',
   {
-    size: { width: 72, height: 52 },
+    size: { width: 220, height: 160 },
     attrs: {
       body: {
+        width: 'calc(w)',
+        height: 'calc(h)',
         fill: '#ffffff',
         stroke: '#64748b',
         strokeWidth: 1.6,
@@ -206,7 +208,13 @@ const ConversationNode = dia.Element.define(
         },
         magnet: true
       },
-      fo: { width: '100%', height: '100%' },
+      fo: {
+        width: 'calc(w)',
+        height: 'calc(h)',
+        x: 0,
+        y: 0,
+        style: { overflow: 'hidden' }
+      },
       foBody: {
         style: {
           width: '100%',
@@ -221,7 +229,7 @@ const ConversationNode = dia.Element.define(
       {
         tagName: 'foreignObject',
         selector: 'fo',
-        attributes: { width: '100%', height: '100%' },
+        attributes: { width: 'calc(w)', height: 'calc(h)' },
         children: [
           {
             tagName: 'div',
