@@ -1,27 +1,21 @@
-import { dia, shapes } from '@joint/core';
+ï»¿import { dia, shapes } from '@joint/core';
 import './style.css';
 
 const app = document.querySelector('#app');
-app.innerHTML = 
+app.innerHTML = `
   <div class="app-shell">
-    <header class="app-header">
-      <div>
-        <h1>NonLinear GPT</h1>
-        <p>Build a branching knowledge map for your prompts. Double-click the grid to spawn a node.</p>
-      </div>
-      <div class="header-actions">
-        <button id="new-node-btn" class="primary">+ New instruction</button>
-        <button id="reset-canvas-btn" class="ghost">Reset canvas</button>
-      </div>
-    </header>
-    <div class="app-main">
-      <div class="paper-wrapper">
-        <div id="paper"></div>
-      </div>
-      <aside class="side-panel">
+    <div class="paper-wrapper">
+      <div id="paper"></div>
+      <button id="new-node-btn" class="floating-button primary">+ New instruction</button>
+      <aside class="control-panel">
+        <div class="panel-header">
+          <h1>NonLinear GPT</h1>
+          <p>Branch out prompts, remix context, and compare ideas side-by-side.</p>
+          <button id="reset-canvas-btn" class="ghost small">Reset workspace</button>
+        </div>
         <section>
           <h2>ChatGPT API Key</h2>
-          <input id="api-key-input" type="password" placeholder="sk-..." />
+          <input id="api-key-input" name="openai-key" type="password" placeholder="sk-..." />
           <p class="muted">Key stays in your browser only. Leave empty to use the offline mock model.</p>
         </section>
         <section>
@@ -35,15 +29,15 @@ app.innerHTML =
         <section>
           <h2>How to use</h2>
           <ul>
-            <li>Drag from one node onto another to connect context.</li>
-            <li>Each node keeps the cumulative chat context from all parents.</li>
-            <li>If a parent changes, children become "stale" until you resend.</li>
+            <li>Double-click empty space to create a node. Drag to pan, pinch/scroll to zoom.</li>
+            <li>Connect nodes to pass the parent's answers into the child's prompt.</li>
+            <li>When a parent changes, children show "Needs refresh" until you resend.</li>
           </ul>
         </section>
       </aside>
     </div>
   </div>
-;
+`;
 
 const nodeState = new Map();
 
@@ -60,9 +54,9 @@ class ChatGateway {
     const contextBlock = contextEntries.length
       ? contextEntries
           .map((entry, index) => {
-            const title = entry.prompt?.trim() ? entry.prompt.trim() : Parent #;
-            const answer = entry.response?.trim() ?? 'No response yet.';
-            return [] \n;
+            const title = entry.prompt && entry.prompt.trim() ? entry.prompt.trim() : `Parent #${index + 1}`;
+            const answer = entry.response && entry.response.trim() ? entry.response.trim() : 'No response yet.';
+            return `[${index + 1}] ${title}\n${answer}`;
           })
           .join('\n\n')
       : 'No parent context provided.';
@@ -70,8 +64,8 @@ class ChatGateway {
     if (!this.apiKey) {
       return [
         'Mock assistant response. Provide an OpenAI API key to talk to the real model.',
-        Prompt: ,
-        Context digest: 
+        `Prompt: ${prompt}`,
+        `Context digest: ${contextBlock.slice(0, 280)}`
       ].join('\n\n');
     }
 
@@ -85,7 +79,7 @@ class ChatGateway {
         },
         {
           role: 'user',
-          content: Context:\n\n\nPrompt:\n
+          content: `Context:\n${contextBlock}\n\nPrompt:\n${prompt}`
         }
       ],
       temperature: 0.4
@@ -95,14 +89,14 @@ class ChatGateway {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: Bearer 
+        Authorization: `Bearer ${this.apiKey}`
       },
       body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
       const errorMessage = await response.text();
-      throw new Error(OpenAI request failed: );
+      throw new Error(`OpenAI request failed: ${errorMessage}`);
     }
 
     const data = await response.json();
@@ -115,13 +109,16 @@ class ChatGateway {
 }
 
 const chatGateway = new ChatGateway();
+const apiKeyInput = document.querySelector('#api-key-input');
+const newNodeButton = document.getElementById('new-node-btn');
+const resetButton = document.getElementById('reset-canvas-btn');
 const storedKey = window.localStorage.getItem('gptgraph.openaiKey');
 if (storedKey) {
-  document.querySelector('#api-key-input').value = storedKey;
+  apiKeyInput.value = storedKey;
   chatGateway.setApiKey(storedKey);
 }
 
-document.querySelector('#api-key-input').addEventListener('input', (event) => {
+apiKeyInput.addEventListener('input', (event) => {
   const value = event.target.value ?? '';
   chatGateway.setApiKey(value);
   if (value) {
@@ -133,34 +130,63 @@ document.querySelector('#api-key-input').addEventListener('input', (event) => {
 
 const graph = new dia.Graph({}, { cellNamespace: shapes });
 const paperElement = document.getElementById('paper');
+
+function createStyledLink() {
+  return new dia.Link({
+    router: { name: 'manhattan' },
+    attrs: {
+      line: {
+        stroke: '#cdd5df',
+        strokeWidth: 1.4,
+        targetMarker: {
+          type: 'path',
+          d: 'M 10 -5 0 0 10 5 z',
+          fill: '#cdd5df'
+        }
+      }
+    }
+  });
+}
+
 const paper = new dia.Paper({
   el: paperElement,
   model: graph,
   width: paperElement.clientWidth,
   height: paperElement.clientHeight,
-  gridSize: 1,
-  background: {
-    color: '#f8f9fb'
-  },
+  gridSize: 24,
+  drawGrid: { name: 'fixedDot', args: { color: '#d2dbea', thickness: 3 } },
+  background: { color: '#f8f9fb' },
   snapLinks: true,
   linkPinning: false,
-  defaultLink: () =>
-    new dia.Link({
-      router: { name: 'manhattan' },
-      attrs: {
-        line: {
-          stroke: '#b0bec5',
-          strokeWidth: 1.6,
-          targetMarker: {
-            type: 'path',
-            d: 'M 10 -5 0 0 10 5 z',
-            fill: '#b0bec5'
-          }
-        }
-      }
-    }),
+  defaultLink: () => createStyledLink(),
   cellViewNamespace: shapes
 });
+
+let isPanning = false;
+let panOrigin = { x: 0, y: 0 };
+let translationOrigin = { x: 0, y: 0 };
+let currentScale = 1;
+
+function resetViewTransform() {
+  panOrigin = { x: 0, y: 0 };
+  translationOrigin = { x: 0, y: 0 };
+  currentScale = 1;
+  paper.translate(0, 0);
+  paper.scale(1, 1);
+}
+
+function getPaperTranslation() {
+  const translation = paper.translate();
+  if (Array.isArray(translation)) {
+    const [tx = 0, ty = 0] = translation;
+    return { tx, ty };
+  }
+  if (translation && typeof translation === 'object') {
+    const { tx = 0, ty = 0 } = translation;
+    return { tx, ty };
+  }
+  return { tx: 0, ty: 0 };
+}
 
 const ConversationNode = dia.Element.define(
   'app.ConversationNode',
@@ -175,41 +201,35 @@ const ConversationNode = dia.Element.define(
         ry: 18,
         filter: {
           name: 'dropShadow',
-          args: {
-            dx: 0,
-            dy: 6,
-            blur: 18,
-            color: 'rgba(15, 23, 42, 0.15)'
-          }
+          args: { dx: 0, dy: 6, blur: 18, color: 'rgba(15, 23, 42, 0.15)' }
         },
         magnet: true
       },
-      fo: {
-        width: '100%',
-        height: '100%'
-      },
+      fo: { width: '100%', height: '100%' },
       foBody: {
-        xmlns: 'http://www.w3.org/1999/xhtml'
+        style: {
+          width: '100%',
+          height: '100%'
+        }
       }
     }
   },
   {
     markup: [
+      { tagName: 'rect', selector: 'body' },
       {
-        tag: 'rect',
-        selector: 'body'
-      },
-      {
-        tag: 'foreignObject',
+        tagName: 'foreignObject',
         selector: 'fo',
-        attributes: {
-          width: '100%',
-          height: '100%'
-        },
+        attributes: { width: '100%', height: '100%' },
         children: [
           {
-            tag: 'body',
-            selector: 'foBody'
+            tagName: 'div',
+            namespaceURI: 'http://www.w3.org/1999/xhtml',
+            selector: 'foBody',
+            style: {
+              width: '100%',
+              height: '100%'
+            }
           }
         ]
       }
@@ -234,11 +254,11 @@ function getParentSummaries(nodeId) {
     .map((link) => {
       const sourceId = link.get('source')?.id;
       if (!sourceId) return null;
-      const sourceState = nodeState.get(sourceId) ?? {};
+      const parentState = nodeState.get(sourceId) ?? {};
       return {
         id: sourceId,
-        prompt: sourceState.prompt ?? '',
-        response: sourceState.response ?? ''
+        prompt: parentState.prompt ?? '',
+        response: parentState.response ?? ''
       };
     })
     .filter(Boolean);
@@ -254,36 +274,46 @@ function createNodeHtml(nodeId) {
   const state = nodeState.get(nodeId);
   if (!state) return '';
   const parentNames = getParentNames(nodeId);
-  const parentLabel = parentNames.length ? parentNames.join(' • ') : 'No parents yet';
-  const statusLabel = state.status === 'loading' ? 'Thinking…' : state.contextDirty ? 'Needs refresh' : 'Ready';
-  const statusClass = state.status === 'loading' ? 'status loading' : state.contextDirty ? 'status stale' : 'status';
+  const parentLabel = parentNames.length ? parentNames.join(' | ') : 'No parents yet';
+  let statusLabel = 'Ready';
+  let statusClass = 'status';
+  if (state.status === 'loading') {
+    statusLabel = 'Thinking...';
+    statusClass = 'status loading';
+  } else if (state.status === 'error') {
+    statusLabel = 'Error';
+    statusClass = 'status error';
+  } else if (state.contextDirty) {
+    statusLabel = 'Needs refresh';
+    statusClass = 'status stale';
+  }
   const responseBlock = state.response
-    ? <pre></pre>
+    ? `<pre>${escapeHtml(state.response)}</pre>`
     : '<p class="placeholder">LLM answers appear here.</p>';
-  const errorBlock = state.error ? <div class="error-banner"></div> : '';
+  const errorBlock = state.error ? `<div class="error-banner">${escapeHtml(state.error)}</div>` : '';
 
-  return 
-    <div class="conversation-node" data-node-id="">
+  return `
+    <div class="conversation-node" data-node-id="${nodeId}">
       <div class="node-meta">
-        <span class="parents" title=""></span>
-        <span class=""></span>
+        <span class="parents" title="${escapeHtml(parentLabel)}">${escapeHtml(parentLabel)}</span>
+        <span class="${statusClass}">${statusLabel}</span>
       </div>
       <div class="prompt-row">
-        <input class="prompt-input" type="text" value="" placeholder="Ask something…" />
-        <button class="send-btn" ></button>
+        <input class="prompt-input" id="prompt-input-${nodeId}" name="prompt-${nodeId}" type="text" value="${escapeHtml(state.prompt)}" placeholder="Ask something..." aria-label="Prompt input" />
+        <button class="send-btn" ${state.status === 'loading' ? 'disabled' : ''}>${state.status === 'loading' ? '...' : 'Send'}</button>
       </div>
-      
-      <div class="response-pane"></div>
+      ${errorBlock}
+      <div class="response-pane">${responseBlock}</div>
       <div class="node-footer">
         <button class="child-btn">Add child</button>
         <button class="duplicate-btn">Duplicate</button>
       </div>
     </div>
-  ;
+  `;
 }
 
 function attachNodeDomHandlers(nodeId) {
-  const domNode = paperElement.querySelector(.conversation-node[data-node-id=""]);
+  const domNode = paperElement.querySelector(`.conversation-node[data-node-id="${nodeId}"]`);
   if (!domNode) return;
   const inputEl = domNode.querySelector('.prompt-input');
   const sendBtn = domNode.querySelector('.send-btn');
@@ -292,7 +322,7 @@ function attachNodeDomHandlers(nodeId) {
 
   inputEl?.addEventListener('input', (event) => {
     const value = event.target.value;
-    updateNodeState(nodeId, { prompt: value });
+    updateNodeState(nodeId, { prompt: value }, { skipRender: true });
     if (nodeState.get(nodeId)?.response) {
       markDescendantsDirty(nodeId);
     }
@@ -311,7 +341,13 @@ function attachNodeDomHandlers(nodeId) {
 }
 
 function updateNodeState(nodeId, patch, { skipRender = false } = {}) {
-  const prev = nodeState.get(nodeId) || { prompt: '', response: '', status: 'idle', contextDirty: false, error: null };
+  const prev = nodeState.get(nodeId) || {
+    prompt: '',
+    response: '',
+    status: 'idle',
+    contextDirty: false,
+    error: null
+  };
   const next = { ...prev, ...patch };
   nodeState.set(nodeId, next);
   if (!skipRender) {
@@ -353,11 +389,7 @@ function gatherContextEntries(nodeId, visited = new Set()) {
     if (!parentId || visited.has(parentId)) return;
     const parentState = nodeState.get(parentId);
     if (parentState) {
-      entries.push({
-        id: parentId,
-        prompt: parentState.prompt,
-        response: parentState.response
-      });
+      entries.push({ id: parentId, prompt: parentState.prompt, response: parentState.response });
       entries.push(...gatherContextEntries(parentId, visited));
     }
   });
@@ -369,7 +401,7 @@ async function handleSend(nodeId) {
   if (!state) return;
   const prompt = state.prompt?.trim();
   if (!prompt) {
-    updateNodeState(nodeId, { error: 'Ââåäèòå âîïðîñ ïåðåä îòïðàâêîé.' });
+    updateNodeState(nodeId, { error: 'Enter a prompt before sending.' });
     return;
   }
   updateNodeState(nodeId, { status: 'loading', error: null, contextDirty: false });
@@ -392,8 +424,8 @@ function markDescendantsDirty(nodeId, visited = new Set()) {
   outbound.forEach((link) => {
     const childId = link.get('target')?.id;
     if (!childId || visited.has(childId)) return;
-    const currentState = nodeState.get(childId) ?? {};
-    const nextStatus = currentState.status === 'loading' ? 'loading' : 'stale';
+    const childState = nodeState.get(childId) ?? {};
+    const nextStatus = childState.status === 'loading' ? 'loading' : 'stale';
     updateNodeState(childId, { contextDirty: true, status: nextStatus });
     markDescendantsDirty(childId, visited);
   });
@@ -405,19 +437,7 @@ function spawnChildNode(parentId) {
   const parentPosition = parent.position();
   const newPosition = { x: parentPosition.x + 420, y: parentPosition.y + 20 };
   const child = createConversationNode(newPosition, '');
-  const link = new dia.Link({
-    source: { id: parentId },
-    target: { id: child.id },
-    router: { name: 'manhattan' },
-    attrs: {
-      line: {
-        stroke: '#cdd5df',
-        strokeWidth: 1.4,
-        targetMarker: { type: 'path', d: 'M 10 -5 0 0 10 5 z', fill: '#cdd5df' }
-      }
-    }
-  });
-  graph.addCell(link);
+  graph.addCell(createStyledLink().set({ source: { id: parentId }, target: { id: child.id } }));
 }
 
 function duplicateNode(nodeId) {
@@ -426,7 +446,14 @@ function duplicateNode(nodeId) {
   const state = nodeState.get(nodeId) ?? {};
   const newPosition = { x: element.position().x + 20, y: element.position().y + 220 };
   const duplicate = createConversationNode(newPosition, state.prompt ?? '');
-  updateNodeState(duplicate.id, { response: state.response ?? '', status: 'idle' });
+  updateNodeState(duplicate.id, { response: state.response ?? '', status: 'idle', contextDirty: false });
+}
+
+function resetWorkspace(initialPrompt = 'Explain how bread is made.') {
+  resetViewTransform();
+  graph.clear();
+  nodeState.clear();
+  createConversationNode({ x: 200, y: 140 }, initialPrompt);
 }
 
 function resizePaper() {
@@ -437,80 +464,71 @@ function resizePaper() {
 window.addEventListener('resize', resizePaper);
 resizePaper();
 
-let isPanning = false;
-let panOrigin = { x: 0, y: 0 };
-let translationOrigin = { x: 0, y: 0 };
-let currentScale = 1;
-
-paper.on('blank:pointerdown', (event) => {
+paper.on('blank:pointerdown', (evt) => {
   isPanning = true;
-  panOrigin = { x: event.clientX, y: event.clientY };
-  const { tx, ty } = paper.translate();
+  panOrigin = { x: evt.clientX, y: evt.clientY };
+  const { tx, ty } = getPaperTranslation();
   translationOrigin = { x: tx, y: ty };
   document.body.style.cursor = 'grabbing';
 });
 
-window.addEventListener('pointermove', (event) => {
+window.addEventListener('pointermove', (evt) => {
   if (!isPanning) return;
-  const dx = event.clientX - panOrigin.x;
-  const dy = event.clientY - panOrigin.y;
+  const dx = evt.clientX - panOrigin.x;
+  const dy = evt.clientY - panOrigin.y;
   paper.translate(translationOrigin.x + dx, translationOrigin.y + dy);
 });
 
 window.addEventListener('pointerup', () => {
-  if (isPanning) {
-    isPanning = false;
-    document.body.style.cursor = '';
-  }
+  if (!isPanning) return;
+  isPanning = false;
+  document.body.style.cursor = '';
 });
 
 paperElement.addEventListener(
   'wheel',
-  (event) => {
-    if (!event.ctrlKey && !event.metaKey) return;
-    event.preventDefault();
-    const delta = event.deltaY > 0 ? -0.1 : 0.1;
+  (evt) => {
+    if (!evt.ctrlKey && !evt.metaKey) return;
+    evt.preventDefault();
+    const delta = evt.deltaY > 0 ? -0.1 : 0.1;
     currentScale = Math.min(1.6, Math.max(0.5, currentScale + delta));
     paper.scale(currentScale, currentScale);
   },
   { passive: false }
 );
 
-paper.on('blank:pointerdblclick', (_, x, y) => {
+paper.on('blank:pointerdblclick', (_evt, x, y) => {
   createConversationNode({ x, y });
 });
 
-document.getElementById('new-node-btn').addEventListener('click', () => {
+newNodeButton?.addEventListener('click', () => {
   const rect = paperElement.getBoundingClientRect();
-  const { tx, ty } = paper.translate();
+  const { tx, ty } = getPaperTranslation();
   const x = (rect.width / 2 - tx) / currentScale;
   const y = (rect.height / 2 - ty) / currentScale;
   createConversationNode({ x, y });
 });
 
-document.getElementById('reset-canvas-btn').addEventListener('click', () => {
-  graph.clear();
-  nodeState.clear();
-  createConversationNode({ x: 240, y: 120 }, 'Explain how bread is made.');
-});
+resetButton?.addEventListener('click', () => resetWorkspace());
 
 function applyTemplate(type) {
+  resetViewTransform();
   graph.clear();
   nodeState.clear();
   if (type === 'bread') {
     const main = createConversationNode({ x: 40, y: 80 }, 'Explain how bread is made.');
     const baking = createConversationNode({ x: 440, y: 40 }, 'What happens during baking chemically?');
     const recipe = createConversationNode({ x: 440, y: 220 }, 'I want a really soft bread. Give me a recipe.');
-    graph.addCell(new dia.Link({ source: { id: main.id }, target: { id: baking.id } }));
-    graph.addCell(new dia.Link({ source: { id: main.id }, target: { id: recipe.id } }));
+    graph.addCell(createStyledLink().set({ source: { id: main.id }, target: { id: baking.id } }));
+    graph.addCell(createStyledLink().set({ source: { id: main.id }, target: { id: recipe.id } }));
   } else if (type === 'science') {
     const core = createConversationNode({ x: 40, y: 60 }, 'Summarize quantum entanglement.');
     const eli5 = createConversationNode({ x: 460, y: 0 }, 'Explain it like I am five.');
     const compare = createConversationNode({ x: 460, y: 140 }, 'Compare entanglement to classical correlation.');
     const apply = createConversationNode({ x: 460, y: 280 }, 'List real-world systems where entanglement is useful.');
-    graph.addCell(new dia.Link({ source: { id: core.id }, target: { id: eli5.id } }));
-    graph.addCell(new dia.Link({ source: { id: core.id }, target: { id: compare.id } }));
-    graph.addCell(new dia.Link({ source: { id: core.id }, target: { id: apply.id } }));
+    graph.addCell(createStyledLink().set({ source: { id: core.id }, target: { id: eli5.id } }));
+    graph.addCell(createStyledLink().set({ source: { id: core.id }, target: { id: compare.id } }));
+    graph.addCell(createStyledLink().set({ source: { id: core.id }, target: { id: apply.id } }));
   } else {
     createConversationNode({ x: 80, y: 60 }, 'New root idea');
     createConversationNode({ x: 420, y: 60 }, 'Another branch');
@@ -522,4 +540,29 @@ Array.from(document.querySelectorAll('.quick-actions button')).forEach((button) 
   button.addEventListener('click', () => applyTemplate(button.dataset.template));
 });
 
-createConversationNode({ x: 120, y: 120 }, 'Explain how bread is made.');
+resetWorkspace();
+
+graph.on('add', (cell) => {
+  if (cell.isLink()) {
+    const targetId = cell.get('target')?.id;
+    if (targetId) {
+      renderNode(targetId);
+    }
+  }
+});
+
+graph.on('change:target', (link) => {
+  const targetId = link.get('target')?.id;
+  if (targetId) {
+    renderNode(targetId);
+  }
+});
+
+graph.on('remove', (cell) => {
+  if (cell.isLink()) {
+    const targetId = cell.previous('target')?.id;
+    if (targetId) {
+      renderNode(targetId);
+    }
+  }
+});
