@@ -1,4 +1,5 @@
 ﻿import { dia, shapes } from '@joint/core';
+import { elementTools } from '@joint/core';
 import './style.css';
 
 const app = document.querySelector('#app');
@@ -162,6 +163,76 @@ const paper = new dia.Paper({
   defaultLink: () => createStyledLink(),
   cellViewNamespace: shapes
 });
+
+const RESIZE_HANDLE_OFFSET = 10;
+
+const ResizeTool = elementTools.Control.extend({
+  children: [
+    {
+      tagName: 'image',
+      selector: 'handle',
+      attributes: {
+        cursor: 'pointer',
+        width: 20,
+        height: 20,
+        'xlink:href': 'https://assets.codepen.io/7589991/8725981_image_resize_square_icon.svg'
+      }
+    },
+    {
+      tagName: 'rect',
+      selector: 'extras',
+      attributes: {
+        'pointer-events': 'none',
+        fill: 'none',
+        stroke: '#33334F',
+        'stroke-dasharray': '2,4',
+        rx: 5,
+        ry: 5
+      }
+    }
+  ],
+  getPosition(view) {
+    const { width, height } = view.model.size();
+    return { x: width, y: height };
+  },
+  setPosition(view, coordinates) {
+    const width = Math.max(coordinates.x - RESIZE_HANDLE_OFFSET, 1);
+    const height = Math.max(coordinates.y - RESIZE_HANDLE_OFFSET, 1);
+    view.model.resize(width, height);
+  }
+});
+
+function attachResizeTool(element) {
+  const view = element.findView(paper);
+  if (view) {
+    view.addTools(
+      new dia.ToolsView({
+        tools: [
+          new ResizeTool({
+            selector: 'body'
+          })
+        ]
+      })
+    );
+    return;
+  }
+  const waitForRender = () => {
+    const renderedView = element.findView(paper);
+    if (renderedView) {
+      renderedView.addTools(
+        new dia.ToolsView({
+          tools: [
+            new ResizeTool({
+              selector: 'body'
+            })
+          ]
+        })
+      );
+      paper.off('render:done', waitForRender);
+    }
+  };
+  paper.on('render:done', waitForRender);
+}
 
 let isPanning = false;
 let panOrigin = { x: 0, y: 0 };
@@ -375,6 +446,7 @@ function renderNode(nodeId) {
 function createConversationNode(position = { x: 120, y: 120 }, initialPrompt = '') {
   const element = new ConversationNode({ position });
   graph.addCell(element);
+  attachResizeTool(element);
   nodeState.set(element.id, {
     prompt: initialPrompt,
     response: '',
