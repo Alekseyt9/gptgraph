@@ -132,22 +132,33 @@ apiKeyInput.addEventListener('input', (event) => {
 const graph = new dia.Graph({}, { cellNamespace: shapes });
 const paperElement = document.getElementById('paper');
 
-function createStyledLink() {
-  return new dia.Link({
-    router: { name: 'orthogonal' },
-    connector: { name: 'smooth' },
-    attrs: {
-      line: {
-        stroke: '#334155',
-        strokeWidth: 2.2,
-        targetMarker: {
-          type: 'path',
-          d: 'M 10 -5 0 0 10 5 z',
-          fill: '#334155'
-        }
+const StyledLink = dia.Link.define('app.StyledLink', {
+  router: { name: 'orthogonal' },
+  connector: { name: 'smooth' },
+  attrs: {
+    line: {
+      connection: true,
+      fill: 'none',
+      'pointer-events': 'none',
+      stroke: '#334155',
+      strokeWidth: 2.2,
+      targetMarker: {
+        type: 'path',
+        d: 'M 10 -5 0 0 10 5 z',
+        fill: '#334155'
       }
     }
-  });
+  },
+  markup: [
+    {
+      tagName: 'path',
+      selector: 'line'
+    }
+  ]
+});
+
+function createStyledLink() {
+  return new StyledLink();
 }
 
 const paper = new dia.Paper({
@@ -165,32 +176,36 @@ const paper = new dia.Paper({
 });
 
 const RESIZE_HANDLE_OFFSET = 10;
+const CONNECT_HANDLE_OFFSET = 16;
+const CONNECT_HANDLE_RADIUS = 11;
 
 const ResizeTool = elementTools.Control.extend({
-  children: [
-    {
-      tagName: 'image',
-      selector: 'handle',
-      attributes: {
-        cursor: 'pointer',
-        width: 20,
-        height: 20,
-        'xlink:href': 'https://assets.codepen.io/7589991/8725981_image_resize_square_icon.svg'
+  children() {
+    return [
+      {
+        tagName: 'image',
+        selector: 'handle',
+        attributes: {
+          cursor: 'pointer',
+          width: 20,
+          height: 20,
+          'xlink:href': 'https://assets.codepen.io/7589991/8725981_image_resize_square_icon.svg'
+        }
+      },
+      {
+        tagName: 'rect',
+        selector: 'extras',
+        attributes: {
+          'pointer-events': 'none',
+          fill: 'none',
+          stroke: '#33334F',
+          'stroke-dasharray': '2,4',
+          rx: 5,
+          ry: 5
+        }
       }
-    },
-    {
-      tagName: 'rect',
-      selector: 'extras',
-      attributes: {
-        'pointer-events': 'none',
-        fill: 'none',
-        stroke: '#33334F',
-        'stroke-dasharray': '2,4',
-        rx: 5,
-        ry: 5
-      }
-    }
-  ],
+    ];
+  },
   getPosition(view) {
     const { width, height } = view.model.size();
     return { x: width, y: height };
@@ -202,32 +217,61 @@ const ResizeTool = elementTools.Control.extend({
   }
 });
 
-function attachResizeTool(element) {
+const connectToolMarkup = [
+  {
+    tagName: 'circle',
+    selector: 'button',
+    attributes: {
+      r: CONNECT_HANDLE_RADIUS,
+      fill: '#0f172a',
+      stroke: '#fff',
+      'stroke-width': 2,
+      cursor: 'pointer'
+    }
+  },
+  {
+    tagName: 'path',
+    selector: 'icon',
+    attributes: {
+      d: 'M -4 0 L 4 0 M 0 -4 L 0 4',
+      stroke: '#fff',
+      'stroke-width': 2,
+      'stroke-linecap': 'round',
+      'pointer-events': 'none'
+    }
+  }
+];
+
+function createNodeToolsView() {
+  return new dia.ToolsView({
+    tools: [
+      new elementTools.Connect({
+        selector: 'body',
+        x: 'calc(w)',
+        y: 'calc(h / 2)',
+        offset: { x: CONNECT_HANDLE_OFFSET, y: 0 },
+        useModelGeometry: true,
+        magnet: 'body',
+        distance: 0,
+        markup: connectToolMarkup
+      }),
+      new ResizeTool({
+        selector: 'body'
+      })
+    ]
+  });
+}
+
+function attachNodeTools(element) {
   const view = element.findView(paper);
   if (view) {
-    view.addTools(
-      new dia.ToolsView({
-        tools: [
-          new ResizeTool({
-            selector: 'body'
-          })
-        ]
-      })
-    );
+    view.addTools(createNodeToolsView());
     return;
   }
   const waitForRender = () => {
     const renderedView = element.findView(paper);
     if (renderedView) {
-      renderedView.addTools(
-        new dia.ToolsView({
-          tools: [
-            new ResizeTool({
-              selector: 'body'
-            })
-          ]
-        })
-      );
+      renderedView.addTools(createNodeToolsView());
       paper.off('render:done', waitForRender);
     }
   };
@@ -300,7 +344,7 @@ const ConversationNode = dia.Element.define(
       {
         tagName: 'foreignObject',
         selector: 'fo',
-        attributes: { width: 'calc(w)', height: 'calc(h)' },
+        attributes: { width: '100%', height: '100%' },
         children: [
           {
             tagName: 'div',
@@ -446,7 +490,7 @@ function renderNode(nodeId) {
 function createConversationNode(position = { x: 120, y: 120 }, initialPrompt = '') {
   const element = new ConversationNode({ position });
   graph.addCell(element);
-  attachResizeTool(element);
+  attachNodeTools(element);
   nodeState.set(element.id, {
     prompt: initialPrompt,
     response: '',
@@ -625,6 +669,18 @@ resetWorkspace();
 
 graph.on('add', (cell) => {
   if (cell.isLink()) {
+    console.debug('[Graph] Link added', cell.id, 'source:', cell.get('source'), 'target:', cell.get('target'));
+    console.debug('[Graph] Link attrs', cell.get('attrs'));
+    requestAnimationFrame(() => {
+      const view = paper.findViewByModel(cell);
+      const pathEl = view?.el?.querySelector('path');
+      if (pathEl) {
+        const computed = window.getComputedStyle(pathEl);
+        console.debug('[Graph] Path d:', pathEl.getAttribute('d'), 'stroke:', computed.stroke, 'stroke-width:', computed.strokeWidth);
+      } else {
+        console.warn('[Graph] No path element found for link', cell.id);
+      }
+    });
     const targetId = cell.get('target')?.id;
     if (targetId) {
       renderNode(targetId);
@@ -633,6 +689,14 @@ graph.on('add', (cell) => {
 });
 
 graph.on('change:target', (link) => {
+  console.debug('[Graph] Link target changed', link.id, 'new target:', link.get('target'));
+  requestAnimationFrame(() => {
+    const view = paper.findViewByModel(link);
+    const pathEl = view?.el?.querySelector('path');
+    if (pathEl) {
+      console.debug('[Graph] Target change path d:', pathEl.getAttribute('d'));
+    }
+  });
   const targetId = link.get('target')?.id;
   if (targetId) {
     renderNode(targetId);
@@ -641,6 +705,7 @@ graph.on('change:target', (link) => {
 
 graph.on('remove', (cell) => {
   if (cell.isLink()) {
+    console.debug('[Graph] Link removed', cell.id, 'last target:', cell.previous('target'));
     const targetId = cell.previous('target')?.id;
     if (targetId) {
       renderNode(targetId);
